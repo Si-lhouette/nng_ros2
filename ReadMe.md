@@ -1,5 +1,5 @@
 # NNG-Sub
-Use nng connect ROS1(Ubuntu 18.04) and ROS2(Ubuntu 20.04).
+Use nng connect ROS1(Ubuntu 18.04) and ROS2(Ubuntu 22.04).
 
 ROS1(Pub) -> ROS2(Sub)
 
