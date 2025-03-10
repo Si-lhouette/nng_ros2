@@ -32,6 +32,8 @@ public:
         char buffer[1024];
         size_t recv_size = sizeof(buffer);
 
+        rclcpp::WallRate loop_rate(100);  // Set loop frequency to 100Hz
+
         while (rclcpp::ok()) {
             int rc = nng_recv(sock_odometry, &buffer, &recv_size, NNG_FLAG_NONBLOCK);
             if (rc == 0) {
@@ -48,6 +50,9 @@ public:
             } else if (rc != NNG_EAGAIN) {
                 RCLCPP_ERROR(this->get_logger(), "nng_recv (point): %s", nng_strerror(rc));
             }
+
+            // Sleep to limit CPU usage and ensure a frequency of 10Hz
+            loop_rate.sleep();
         }
     }
 
