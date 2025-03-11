@@ -35,6 +35,8 @@ public:
         rclcpp::WallRate loop_rate(100);  // Set loop frequency to 100Hz
 
         while (rclcpp::ok()) {
+            memset(buffer, 0, sizeof(buffer));
+            recv_size = 7 * sizeof(float);
             int rc = nng_recv(sock_odometry, &buffer, &recv_size, NNG_FLAG_NONBLOCK);
             if (rc == 0) {
                 RCLCPP_INFO(this->get_logger(), "Received from Odometry: %zu bytes", recv_size);
@@ -43,6 +45,7 @@ public:
                 RCLCPP_ERROR(this->get_logger(), "nng_recv (odometry): %s", nng_strerror(rc));
             }
 
+            recv_size = 3 * sizeof(float);
             rc = nng_recv(sock_point, &buffer, &recv_size, NNG_FLAG_NONBLOCK);
             if (rc == 0) {
                 RCLCPP_INFO(this->get_logger(), "Received from PointStamped: %zu bytes", recv_size);
@@ -113,6 +116,11 @@ private:
         odometry.pose.pose.orientation.z = data[5];
         odometry.pose.pose.orientation.w = data[6];
 
+        // for (size_t i = 0; i < 7; i++)
+        // {
+        //     std::cout <<"data[" << i << "]: " << data[i] << std::endl;
+        // }
+
         // Set header
         odometry.header.stamp = this->get_clock()->now();
         odometry.header.frame_id = "world";
@@ -125,6 +133,14 @@ private:
                     odometry.pose.pose.orientation.y,
                     odometry.pose.pose.orientation.z,
                     odometry.pose.pose.orientation.w);
+
+        // std::cout << "Raw PointStamped Data:" << std::endl;
+        // std::vector<uint8_t> raw_data(reinterpret_cast<const uint8_t*>(data),
+        //                             reinterpret_cast<const uint8_t*>(data) + size);
+        // for (size_t i = 0; i < raw_data.size(); ++i) {
+        //     printf("%02X ", raw_data[i]);  // 以十六进制打印每个字节
+        // }
+        // printf("\n");
 
         odometry_pub_->publish(odometry);
     }
