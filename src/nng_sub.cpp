@@ -10,8 +10,8 @@ class NngSubscriber : public rclcpp::Node {
 public:
     NngSubscriber() : Node("nng_subscriber") {
         // Create publishers
-        odometry_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/Odometry", 10);
-        point_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("/detect_lidar_node/detect_lidar/local_ball_pos", 10);
+        odometry_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/ekf_quat/ekf_odom", 100);
+        point_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("/detect_lidar_node/detect_lidar/ball_ekf_pos", 100);
 
         // Initialize subscriber sockets
         if (!initSubscriberSocket(sock_odometry, "tcp://127.0.0.1:12345", "Odometry")) {
@@ -21,6 +21,8 @@ public:
             nng_close(sock_odometry);
             return;
         }
+
+        last_log_time_ = this->now(); 
     }
 
     ~NngSubscriber() {
@@ -32,14 +34,15 @@ public:
         char buffer[1024];
         size_t recv_size = sizeof(buffer);
 
-        rclcpp::WallRate loop_rate(100);  // Set loop frequency to 100Hz
+        rclcpp::WallRate loop_rate(500);  // Set loop frequency to 100Hz
 
         while (rclcpp::ok()) {
             memset(buffer, 0, sizeof(buffer));
             recv_size = 7 * sizeof(float);
             int rc = nng_recv(sock_odometry, &buffer, &recv_size, NNG_FLAG_NONBLOCK);
             if (rc == 0) {
-                RCLCPP_INFO(this->get_logger(), "Received from Odometry: %zu bytes", recv_size);
+                // RCLCPP_INFO(this->get_logger(), "Received from Odometry: %zu bytes", recv_size);
+                odom_count_++; 
                 publishOdometry(buffer, recv_size);
             } else if (rc != NNG_EAGAIN) {
                 RCLCPP_ERROR(this->get_logger(), "nng_recv (odometry): %s", nng_strerror(rc));
@@ -48,10 +51,22 @@ public:
             recv_size = 3 * sizeof(float);
             rc = nng_recv(sock_point, &buffer, &recv_size, NNG_FLAG_NONBLOCK);
             if (rc == 0) {
-                RCLCPP_INFO(this->get_logger(), "Received from PointStamped: %zu bytes", recv_size);
+                // RCLCPP_INFO(this->get_logger(), "Received from PointStamped: %zu bytes", recv_size);
+                point_count_++;
                 publishPoint(buffer, recv_size);
             } else if (rc != NNG_EAGAIN) {
                 RCLCPP_ERROR(this->get_logger(), "nng_recv (point): %s", nng_strerror(rc));
+            }
+
+            rclcpp::Time now = this->now();
+            if ((now - last_log_time_).seconds() >= 1.0) {
+                RCLCPP_INFO(this->get_logger(), "Odometry Hz: %.2f, PointStamped Hz: %.2f",
+                            static_cast<double>(odom_count_) / (now - last_log_time_).seconds(),
+                            static_cast<double>(point_count_) / (now - last_log_time_).seconds());
+
+                odom_count_ = 0;
+                point_count_ = 0;
+                last_log_time_ = now;
             }
 
             // Sleep to limit CPU usage and ensure a frequency of 10Hz
@@ -64,6 +79,9 @@ private:
     nng_socket sock_point;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odometry_pub_;
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr point_pub_;
+    rclcpp::Time last_log_time_;
+    int odom_count_;
+    int point_count_;
 
     bool initSubscriberSocket(nng_socket& socket, const std::string& address, const std::string& name) {
         int rc = nng_sub0_open(&socket);
@@ -125,14 +143,14 @@ private:
         odometry.header.stamp = this->get_clock()->now();
         odometry.header.frame_id = "world";
 
-        RCLCPP_INFO(this->get_logger(), "Parsed Odometry: x=%.6f, y=%.6f, z=%.6f, qx=%.6f, qy=%.6f, qz=%.6f, qw=%.6f",
-                    odometry.pose.pose.position.x,
-                    odometry.pose.pose.position.y,
-                    odometry.pose.pose.position.z,
-                    odometry.pose.pose.orientation.x,
-                    odometry.pose.pose.orientation.y,
-                    odometry.pose.pose.orientation.z,
-                    odometry.pose.pose.orientation.w);
+        // RCLCPP_INFO(this->get_logger(), "Parsed Odometry: x=%.6f, y=%.6f, z=%.6f, qx=%.6f, qy=%.6f, qz=%.6f, qw=%.6f",
+        //             odometry.pose.pose.position.x,
+        //             odometry.pose.pose.position.y,
+        //             odometry.pose.pose.position.z,
+        //             odometry.pose.pose.orientation.x,
+        //             odometry.pose.pose.orientation.y,
+        //             odometry.pose.pose.orientation.z,
+        //             odometry.pose.pose.orientation.w);
 
         // std::cout << "Raw PointStamped Data:" << std::endl;
         // std::vector<uint8_t> raw_data(reinterpret_cast<const uint8_t*>(data),
@@ -162,10 +180,10 @@ private:
         point.header.stamp = this->get_clock()->now();
         point.header.frame_id = "world";
 
-        RCLCPP_INFO(this->get_logger(), "Parsed Point: x=%.6f, y=%.6f, z=%.6f",
-                    point.point.x,
-                    point.point.y,
-                    point.point.z);
+        // RCLCPP_INFO(this->get_logger(), "Parsed Point: x=%.6f, y=%.6f, z=%.6f",
+        //             point.point.x,
+        //             point.point.y,
+        //             point.point.z);
 
         point_pub_->publish(point);
     }
