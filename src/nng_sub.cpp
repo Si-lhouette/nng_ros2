@@ -14,7 +14,7 @@ class NngSubscriber : public rclcpp::Node {
 public:
     NngSubscriber() : Node("nng_subscriber") {
         // Create publishers
-        odometry_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/ekf_quat/ekf_odom", 100);
+        odometry_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/Odometry", 100);
         point_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("/detect_lidar_node/detect_lidar/ball_ekf_pos", 100);
         odometry_others_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/others_odom", 100);
 
